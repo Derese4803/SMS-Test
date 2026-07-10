@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import requests
 import base64
-import io
+import io 
 from twilio.rest import Client
 
 # 🎨 1. PAGE CONFIGURATION
