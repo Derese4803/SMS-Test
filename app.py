@@ -2,50 +2,66 @@ import streamlit as st
 import requests
 import pandas as pd
 
-# 1. Page Config
-st.set_page_config(page_title="CommCare Data Viewer", layout="wide")
-st.title("☕ CommCare Coffee-23 Dashboard")
+# 1. Page Configuration
+st.set_page_config(page_title="CommCare Analytics", layout="wide")
+st.title("📊 Enumerator Performance Dashboard")
 
-# 2. Fetching Function
-@st.cache_data(ttl=3600)
-def fetch_cases():
-    # Retrieve credentials from your secrets.toml
+# 2. Fetching and Processing Function
+@st.cache_data(ttl=600)  # Caches for 10 minutes to save API hits
+def get_commcare_data():
+    # Use secrets for security
+    domain = st.secrets["commcare"]["domain"]
     username = st.secrets["commcare"]["username"]
     api_key = st.secrets["commcare"]["api_key"]
-    domain = st.secrets["commcare"]["domain"]
     
-    # API URL for Cases
-    url = f"https://www.commcarehq.org/a/{domain}/api/v0.5/case/"
+    # Form API endpoint
+    url = f"https://www.commcarehq.org/a/{domain}/api/v0.5/form/"
     
     try:
-        # Authentication
         response = requests.get(url, auth=(username, api_key))
         response.raise_for_status()
-        
-        # Parse JSON
         data = response.json()
         
-        # Use json_normalize to flatten nested JSON structures
-        if "objects" in data:
-            df = pd.json_normalize(data["objects"])
-            return df
-        return None
-        
+        # Flatten the nested JSON structure
+        # CommCare forms are deeply nested, json_normalize fixes this
+        df = pd.json_normalize(data.get("objects", []))
+        return df
     except Exception as e:
-        st.error(f"Error: {e}")
-        return None
+        st.error(f"Error fetching data: {e}")
+        return pd.DataFrame()
 
-# 3. Main Interface
-if st.button("🚀 Fetch Data from CommCare"):
-    with st.spinner("Downloading your data..."):
-        df = fetch_cases()
+# 3. Main Dashboard
+df = get_commcare_data()
+
+if not df.empty:
+    # Rename columns to be more readable if they exist
+    # CommCare usually stores the user in 'metadata.username' or 'form.meta.username'
+    # We look for the most common path
+    user_col = "metadata.username" if "metadata.username" in df.columns else "form.meta.username"
+    
+    if user_col in df.columns:
+        # --- Analysis ---
+        st.subheader("Submissions per Enumerator")
         
-        if df is not None and not df.empty:
-            st.success("Data loaded!")
+        # Count submissions per user
+        stats = df[user_col].value_counts().reset_index()
+        stats.columns = ['Enumerator', 'Total Submissions']
+        
+        # Display Bar Chart
+        st.bar_chart(stats.set_index('Enumerator'))
+        
+        # Display Table
+        st.table(stats)
+        
+        # --- Raw Data Preview ---
+        with st.expander("View Raw Data"):
             st.dataframe(df)
-            
-            # Optional: Add a download button
-            csv = df.to_csv(index=False).encode('utf-8')
-            st.download_button("Download as CSV", csv, "commcare_data.csv", "text/csv")
-        else:
-            st.warning("No cases found or connection error.")
+    else:
+        st.warning(f"Could not identify the username column. Available columns: {df.columns.tolist()}")
+else:
+    st.info("No data found or connection failed. Check your API credentials.")
+
+# 4. Sidebar Refresh
+if st.sidebar.button("Refresh Data"):
+    st.cache_data.clear()
+    st.rerun()
