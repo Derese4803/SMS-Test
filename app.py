@@ -2,62 +2,70 @@ import streamlit as st
 import requests
 import pandas as pd
 
-# 1. Page Configuration
+# 1. Page Config
 st.set_page_config(page_title="CommCare Analytics", layout="wide")
 st.title("📊 Enumerator Performance Dashboard")
 
-# 2. Fetching and Processing Function
+# 2. Fetching Function
 @st.cache_data(ttl=600)
 def get_commcare_data():
-    domain = st.secrets["commcare"]["domain"]
-    username = st.secrets["commcare"]["username"]
-    api_key = st.secrets["commcare"]["api_key"]
-    
-    # Ensure URL is correct
+    try:
+        # Access secrets directly
+        domain = st.secrets["commcare"]["domain"]
+        username = st.secrets["commcare"]["username"]
+        api_key = st.secrets["commcare"]["api_key"]
+    except KeyError as e:
+        st.error(f"Missing Secret: {e}. Please ensure secrets.toml is configured.")
+        return None
+
+    # Construct URL
     url = f"https://www.commcarehq.org/a/{domain}/api/v0.5/form/"
     
-    # Adding headers can sometimes help if basic auth feels 'thin'
-    # but the primary requirement is the correct auth tuple
+    # Debug: Check if credentials look sane (not empty)
+    if not username or not api_key or not domain:
+        st.error("Credentials found but seem to be empty strings.")
+        return None
+
     try:
-        response = requests.get(
-            url, 
-            auth=(username, api_key),
-            headers={"Content-Type": "application/json"}
-        )
+        # Perform Request
+        response = requests.get(url, auth=(username, api_key))
         
-        # This will raise an error if 401 occurs, allowing us to catch it
+        # If unauthorized, show details
+        if response.status_code == 401:
+            st.error("401 Unauthorized: The server rejected your credentials. "
+                     "Double-check your API key and email in the Streamlit Cloud 'Secrets' tab.")
+            return None
+            
         response.raise_for_status()
         
         data = response.json()
-        df = pd.json_normalize(data.get("objects", []))
-        return df
+        return pd.json_normalize(data.get("objects", []))
         
-    except requests.exceptions.HTTPError as err:
-        if response.status_code == 401:
-            st.error("401 Unauthorized: Please check your Username (must be your full email) and API Key in secrets.toml.")
-        else:
-            st.error(f"HTTP Error: {err}")
-        return pd.DataFrame()
     except Exception as e:
-        st.error(f"An unexpected error occurred: {e}")
-        return pd.DataFrame()
+        st.error(f"Connection Error: {e}")
+        return None
 
-# 3. Main Dashboard
+# 3. Main Logic
 df = get_commcare_data()
 
-if not df.empty:
-    # Look for username in typical locations
-    possible_cols = ["metadata.username", "form.meta.username", "user_id"]
-    user_col = next((col for col in possible_cols if col in df.columns), None)
+if df is not None and not df.empty:
+    # Attempt to find the username column
+    # Check both potential CommCare API paths
+    target_col = None
+    for col in ["metadata.username", "form.meta.username"]:
+        if col in df.columns:
+            target_col = col
+            break
     
-    if user_col:
+    if target_col:
         st.subheader("Submissions per Enumerator")
-        stats = df[user_col].value_counts().reset_index()
+        stats = df[target_col].value_counts().reset_index()
         stats.columns = ['Enumerator', 'Total Submissions']
+        
         st.bar_chart(stats.set_index('Enumerator'))
         st.table(stats)
     else:
-        st.write("Columns found:", df.columns.tolist())
-        st.warning("Could not find a username column in the data.")
-else:
-    st.info("No data retrieved.")
+        st.warning("Data loaded, but could not identify the 'username' column.")
+        st.write("Available columns:", df.columns.tolist())
+elif df is not None:
+    st.info("No forms found in this domain.")
