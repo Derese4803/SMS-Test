@@ -14,10 +14,9 @@ if "user" not in st.session_state:
 if "master_log" not in st.session_state:
     st.session_state.master_log = []
 
-# ─── DUMMY DATA (Replace with your actual data loading) ───
+# ─── DATA LOADING ────────────────────────────────────────
 @st.cache_data
 def load_data():
-    # Replace these with your actual data sources
     df_c = pd.DataFrame({
         'number': [101, 102],
         'constraint': ['Age > 0', 'Yield <= Area'],
@@ -82,7 +81,6 @@ def login_screen():
         enum_user = st.text_input("Username", key="enum_user")
         enum_pass = st.text_input("Password", type="password", key="enum_pass")
         if st.button("Login as Enumerator"):
-            # Replace with real auth
             if enum_user and enum_pass:
                 st.session_state.logged_in = True
                 st.session_state.logged_in_as = "enumerator"
@@ -96,7 +94,6 @@ def login_screen():
         admin_user = st.text_input("Username", key="admin_user")
         admin_pass = st.text_input("Password", type="password", key="admin_pass")
         if st.button("Login as Admin"):
-            # Replace with real auth
             if admin_user == "admin" and admin_pass == "admin123":
                 st.session_state.logged_in = True
                 st.session_state.logged_in_as = "admin"
@@ -111,7 +108,8 @@ def logout():
         for key in ['logged_in', 'logged_in_as', 'user']:
             st.session_state[key] = None if key != 'logged_in' else False
         st.rerun()
-[7/20/2026 12:09 PM] @ Dere: # ─── ENUMERATOR VIEW ─────────────────────────────────────
+
+# ─── ENUMERATOR VIEW ─────────────────────────────────────
 def enumerator_view():
     st.subheader(f"📝 Error Correction - {st.session_state.user}")
     st.write(f"Remaining errors: {len(remaining_df)}")
@@ -140,7 +138,6 @@ def enumerator_view():
             st.info(f"Rule: {row.get('constraint', 'N/A')}")
             st.warning(f"Current Value: {row.get('value', 'N/A')}")
             
-            # Use record_id for stable widget keys
             reason = st.text_area("Reason for error", key=f"reason_{record_id}")
             fix = st.text_input("Corrected Value", key=f"fix_{record_id}")
             
@@ -163,7 +160,6 @@ def enumerator_view():
 def admin_view():
     st.subheader("📊 Admin Correction Dashboard")
     
-    # Calculations (renamed 'remaining' to 'remaining_count' to avoid shadowing)
     total_errors = len(combined)
     total_corrected = len(fixed_df)
     total_consistency = len(df_c)
@@ -172,17 +168,15 @@ def admin_view():
     
     # Custom Color-Coded Boxes
     c1, c2, c3, c4, c5 = st.columns(5)
-    with c1: styled_metric("Total", total_errors, "#6c757d")      # Gray
-    with c2: styled_metric("Corrected", total_corrected, "#28a745")  # Green
-    with c3: styled_metric("Consistency", total_consistency, "#007bff")  # Blue
-    with c4: styled_metric("Logic", total_logic, "#fd7e14")       # Orange
-    with c5: styled_metric("Remaining", remaining_count, "#dc3545")   # Red
+    with c1: styled_metric("Total", total_errors, "#6c757d")
+    with c2: styled_metric("Corrected", total_corrected, "#28a745")
+    with c3: styled_metric("Consistency", total_consistency, "#007bff")
+    with c4: styled_metric("Logic", total_logic, "#fd7e14")
+    with c5: styled_metric("Remaining", remaining_count, "#dc3545")
     
     st.markdown("---")
     
-    # Enumerator Stats
     st.write("### 👥 Performance by Enumerator")
-    
     if 'username' in combined.columns:
         stats = combined.groupby('username')['number'].count().reset_index()
         stats.columns = ['Enumerator', 'Assigned']
@@ -196,13 +190,13 @@ def admin_view():
         f_stats = pd.DataFrame(columns=['Enumerator', 'Fixed'])
     
     final = pd.merge(stats, f_stats, on='Enumerator', how='left').fillna(0)
-[7/20/2026 12:09 PM] @ Dere: final['Fixed'] = final['Fixed'].astype(int)
+    final['Fixed'] = final['Fixed'].astype(int)
     final['Remaining'] = final['Assigned'] - final['Fixed']
     st.dataframe(final, use_container_width=True)
     
     st.markdown("---")
     
-    # Tabs
+    # Information Navigation Tabs
     tab1, tab2, tab3, tab4 = st.tabs(["📋 All Data", "✅ Corrected", "📈 Performance", "📊 Statistics"])
     
     with tab1:
@@ -232,7 +226,7 @@ def admin_view():
         }).set_index("Status")
         st.bar_chart(status_df)
 
-# ─── MAIN ────────────────────────────────────────────────
+# ─── MAIN EXECUTION BLOCK ────────────────────────────────
 def main():
     if not st.session_state.logged_in:
         login_screen()
@@ -250,5 +244,5 @@ def main():
             st.session_state.logged_in = False
             st.rerun()
 
-if name == "main":
+if __name__ == "__main__":
     main()
