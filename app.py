@@ -1,4 +1,4 @@
-[7/20/2026 12:09 PM] @ Dere: import streamlit as st
+import streamlit as st
 import pandas as pd
 
 # ─── PAGE CONFIG ─────────────────────────────────────────
